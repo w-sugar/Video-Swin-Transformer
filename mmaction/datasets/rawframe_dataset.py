@@ -1,7 +1,10 @@
 import copy
+import os
 import os.path as osp
 
 import torch
+import json
+import mmcv
 
 from .base import BaseDataset
 from .builder import DATASETS
@@ -90,7 +93,7 @@ class RawframeDataset(BaseDataset):
                  pipeline,
                  data_prefix=None,
                  test_mode=False,
-                 filename_tmpl='img_{:05}.jpg',
+                 filename_tmpl='frame_{:05}.jpg', #'img_{:05}.jpg',
                  with_offset=False,
                  multi_class=False,
                  num_classes=None,
@@ -101,6 +104,19 @@ class RawframeDataset(BaseDataset):
                  dynamic_length=False):
         self.filename_tmpl = filename_tmpl
         self.with_offset = with_offset
+        self.dict_util = {
+            "person_reads_document": 0,
+            "person_texts_on_phone": 1,
+            "person_picks_up_object": 2,
+            "person_puts_down_object": 3,
+            "person_transfers_object": 4,
+            "person_interacts_with_laptop": 5,
+            "person_enters_scene_through_structure": 6,
+            "person_sits_down": 7,
+            "person_opens_facility_door": 8,
+            "person_stands_up": 9,
+            "person_exits_scene_through_structure": 10
+        }
         super().__init__(
             ann_file,
             pipeline,
@@ -152,6 +168,28 @@ class RawframeDataset(BaseDataset):
 
         return video_infos
 
+    def load_json_annotations(self):
+        """Load json annotation file to get video information."""
+        video_infos = mmcv.load(self.ann_file)
+        num_videos = len(video_infos)
+        # path_key = 'frame_dir' if 'frame_dir' in video_infos[0] else 'filename'
+        path_key = 'frame_dir'
+        video_infos_new = []
+        for i in range(num_videos):
+            path_value = video_infos[i]['video'].replace('.r13', '')
+            if self.data_prefix is not None:
+                path_value = osp.join(self.data_prefix, path_value)
+            video_infos[i][path_key] = path_value
+            if 'frame_%05d.jpg' % video_infos[i]['fid'] not in os.listdir(path_value):
+                continue
+            if self.multi_class:
+                assert self.num_classes is not None
+            else:
+                assert len(video_infos[i]['label']) == 1
+                video_infos[i]['label'] = video_infos[i]['label'][0]
+            video_infos_new.append(video_infos[i])
+        return video_infos_new
+
     def prepare_train_frames(self, idx):
         """Prepare the frames for training given the index."""
         results = copy.deepcopy(self.video_infos[idx])
@@ -162,7 +200,9 @@ class RawframeDataset(BaseDataset):
         # prepare tensor in getitem
         if self.multi_class:
             onehot = torch.zeros(self.num_classes)
-            onehot[results['label']] = 1.
+            #onehot[results['label']] = 1.
+            for key, value in results['label'].items():
+                onehot[self.dict_util[key]] = value
             results['label'] = onehot
 
         return self.pipeline(results)

@@ -13,6 +13,7 @@ from torch.nn.modules.utils import _pair
 from ...utils import get_random_string, get_shm_dir, get_thread_id
 from ..builder import PIPELINES
 import random
+import cv2
 
 
 @PIPELINES.register_module()
@@ -230,7 +231,10 @@ class SampleFrames:
             results (dict): The resulting dict to be modified and passed
                 to the next transform in pipeline.
         """
-        total_frames = results['total_frames']
+        # total_frames = results['total_frames']
+        total_frames = results['duration']
+        self.frame_interval = total_frames // 4
+
         if self.frame_uniform:  # sthv2 sampling strategy
             assert results['start_index'] == 0
             frame_inds = self.get_seq_frames(total_frames)
@@ -1133,6 +1137,17 @@ class RawFrameDecode:
         self.kwargs = kwargs
         self.file_client = None
 
+    def find_first_id(self, root, img_format, first_id):
+        read_format = os.path.join(root, img_format)
+        if not os.path.exists(read_format.format(first_id)):
+            if first_id == 0:
+                first_id += 1
+            else:
+                first_id -= 1
+            return self.find_first_id(root, img_format, first_id)
+        else:
+            return first_id
+
     def __call__(self, results):
         """Perform the ``RawFrameDecode`` to pick frames given indices.
 
@@ -1157,12 +1172,27 @@ class RawFrameDecode:
         offset = results.get('offset', 0)
 
         for frame_idx in results['frame_inds']:
-            frame_idx += offset
+            # frame_idx += offset
+            frame_idx += results['fid']
             if modality == 'RGB':
+                frame_idx = self.find_first_id(directory, filename_tmpl, frame_idx)
                 filepath = osp.join(directory, filename_tmpl.format(frame_idx))
-                img_bytes = self.file_client.get(filepath)
-                # Get frame with channel order RGB directly.
-                cur_frame = mmcv.imfrombytes(img_bytes, channel_order='rgb')
+                if 'bbox_clip' in results.keys():
+                    x1, y1, x2, y2 = list(map(int, results['bbox_clip']))
+                    x1 = max(x1, 0)
+                    y1 = max(y1, 0)
+                    img_ori = cv2.imread(filepath)
+                    try:
+                        img_ori = cv2.cvtColor(img_ori, cv2.COLOR_BGR2RGB)
+                        img_crop = img_ori[y1:y2, x1:x2]
+                        cur_frame = img_crop
+                    except:
+                        assert len(imgs) > 0
+                        cur_frame = imgs[-1]
+                else:
+                    img_bytes = self.file_client.get(filepath)
+                    # Get frame with channel order RGB directly.
+                    cur_frame = mmcv.imfrombytes(img_bytes, channel_order='rgb')
                 imgs.append(cur_frame)
             elif modality == 'Flow':
                 x_filepath = osp.join(directory,
