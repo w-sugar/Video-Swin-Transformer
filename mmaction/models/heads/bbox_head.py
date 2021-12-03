@@ -177,6 +177,7 @@ class BBoxHeadAVA(nn.Module):
 
         losses = dict()
         if cls_score is not None:
+            '''
             # Only use the cls_score
             labels = labels[:, 1:]
             pos_inds = torch.sum(labels, dim=-1) > 0
@@ -184,7 +185,6 @@ class BBoxHeadAVA(nn.Module):
             labels = labels[pos_inds]
 
             bce_loss = F.binary_cross_entropy_with_logits
-
             loss = bce_loss(cls_score, labels, reduction='none')
             pt = torch.exp(-loss)
             F_loss = self.focal_alpha * (1 - pt)**self.focal_gamma * loss
@@ -197,6 +197,10 @@ class BBoxHeadAVA(nn.Module):
             for i, k in enumerate(self.topk):
                 losses[f'recall@top{k}'] = recall_k[i]
                 losses[f'prec@top{k}'] = prec_k[i]
+            '''
+            labels = labels.flatten()
+            loss = F.cross_entropy(cls_score, labels.long())
+            losses['loss_action_cls'] = loss
         return losses
 
     def get_det_bboxes(self,

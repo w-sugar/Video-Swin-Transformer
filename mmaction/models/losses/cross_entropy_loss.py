@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from ..builder import LOSSES
@@ -34,6 +35,7 @@ class CrossEntropyLoss(BaseWeightedLoss):
         self.class_weight = None
         if class_weight is not None:
             self.class_weight = torch.Tensor(class_weight)
+        self._loss_fn = nn.BCEWithLogitsLoss()
 
     def _forward(self, cls_score, label, **kwargs):
         """Forward function.
@@ -54,11 +56,13 @@ class CrossEntropyLoss(BaseWeightedLoss):
             assert len(kwargs) == 0, \
                 ('For now, no extra args are supported for soft label, '
                  f'but get {kwargs}')
-
-            lsm = F.log_softmax(cls_score, 1)
-            if self.class_weight is not None:
-                lsm = lsm * self.class_weight.unsqueeze(0)
-            loss_cls = -(label * lsm).sum(1)
+            '''
+            # lsm = F.log_softmax(cls_score, 1)
+            # if self.class_weight is not None:
+            #     lsm = lsm * self.class_weight.unsqueeze(0)
+            # loss_cls = -(label * lsm).sum(1)
+            '''
+            loss_cls = self._loss_fn(cls_score, label)
 
             # default reduction 'mean'
             if self.class_weight is not None:

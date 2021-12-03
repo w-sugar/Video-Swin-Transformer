@@ -9,6 +9,10 @@ import mmcv
 from .base import BaseDataset
 from .builder import DATASETS
 
+videos_val = []
+with open('/home/sugar/workspace/meva_srl_all_validation_video.txt', 'r') as f:
+    for line in f.readlines():
+        videos_val.append(line.strip('\n'))
 
 @DATASETS.register_module()
 class RawframeDataset(BaseDataset):
@@ -104,18 +108,57 @@ class RawframeDataset(BaseDataset):
                  dynamic_length=False):
         self.filename_tmpl = filename_tmpl
         self.with_offset = with_offset
+        # self.dict_util = {
+        #     "person_reads_document": 0,
+        #     # "person_carries_heavy_object": 0,
+        #     "person_texts_on_phone": 1,
+        #     "person_picks_up_object": 2,
+        #     "person_puts_down_object": 3,
+        #     "person_transfers_object": 4,
+        #     "person_interacts_with_laptop": 5,
+        #     "person_enters_scene_through_structure": 6,
+        #     "person_sits_down": 7,
+        #     "person_opens_facility_door": 8,
+        #     "person_stands_up": 9,
+        #     "person_exits_scene_through_structure": 10,
+        #     "person": 11
+        # }
+        # self.dict_util = {
+        #     # 'person_sits_down': 0,
+        #     'person_reads_document': 0,
+        #     'person_stands_up': 1,
+        #     "person_texts_on_phone": 2,
+        #     "person": 3
+        # }
+        # self.dict_util = {
+        #     'person_sits_down': 0,
+        #     'person_stands_up': 1,
+        #     "person": 2
+        # }
+        # self.dict_util = {
+        #     'person_picks_up_object': 0,
+        #     'person_puts_down_object': 1,
+        #     "person": 2
+        # }
+        # self.dict_util = {
+        #     'person_interacts_with_laptop': 0,
+        #     'person_reads_document': 1,
+        #     'person_texts_on_phone': 2,
+        #     "person": 3
+        # }
+        # self.dict_util = {
+        #     "person_enters_scene_through_structure": 0,
+        #     "person_exits_scene_through_structure": 1,
+        #     "person_opens_facility_door": 2,
+        #     "person": 3
+        # }
         self.dict_util = {
-            "person_reads_document": 0,
-            "person_texts_on_phone": 1,
-            "person_picks_up_object": 2,
-            "person_puts_down_object": 3,
-            "person_transfers_object": 4,
-            "person_interacts_with_laptop": 5,
-            "person_enters_scene_through_structure": 6,
-            "person_sits_down": 7,
-            "person_opens_facility_door": 8,
-            "person_stands_up": 9,
-            "person_exits_scene_through_structure": 10
+            # 'person_picks_up_object': 0,
+            'person_enters_scene_through_structure': 0,
+            'person_puts_down_object': 1,
+            'person_sits_down': 2,
+            'person_stands_up': 3,
+            'person': 4
         }
         super().__init__(
             ann_file,
@@ -177,16 +220,28 @@ class RawframeDataset(BaseDataset):
         video_infos_new = []
         for i in range(num_videos):
             path_value = video_infos[i]['video'].replace('.r13', '')
+            # path_value = video_infos[i]['video']
+            path_value = path_value.replace('_mot', '.avi')
+            # path_value = video_infos[i]['video']
             if self.data_prefix is not None:
+                # data_root = '/data/meva_data/meva_frames'
+                # data_root_val = '/data1/MEVA_frame'
+                # if path_value in videos_val:
+                #     path_value = osp.join(data_root_val, path_value)
+                # else:
+                #     path_value = osp.join(data_root, path_value)
                 path_value = osp.join(self.data_prefix, path_value)
+                
             video_infos[i][path_key] = path_value
             if 'frame_%05d.jpg' % video_infos[i]['fid'] not in os.listdir(path_value):
+                continue
+            if video_infos[i]['bbox_clip'][0] == video_infos[i]['bbox_clip'][2] or video_infos[i]['bbox_clip'][1] == video_infos[i]['bbox_clip'][3]:
                 continue
             if self.multi_class:
                 assert self.num_classes is not None
             else:
                 assert len(video_infos[i]['label']) == 1
-                video_infos[i]['label'] = video_infos[i]['label'][0]
+                video_infos[i]['label'] = self.dict_util[list(video_infos[i]['label'].keys())[0]]
             video_infos_new.append(video_infos[i])
         return video_infos_new
 
@@ -217,7 +272,9 @@ class RawframeDataset(BaseDataset):
         # prepare tensor in getitem
         if self.multi_class:
             onehot = torch.zeros(self.num_classes)
-            onehot[results['label']] = 1.
+            # onehot[results['label']] = 1.
+            for key, value in results['label'].items():
+                onehot[self.dict_util[key]] = value
             results['label'] = onehot
 
         return self.pipeline(results)

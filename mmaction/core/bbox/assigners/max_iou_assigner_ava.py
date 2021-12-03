@@ -112,7 +112,7 @@ if mmdet_imported:
 
             if gt_labels is not None:
                 # consider multi-class case (AVA)
-                assert len(gt_labels[0]) > 1
+                # assert len(gt_labels[0]) > 1
                 assigned_labels = assigned_gt_inds.new_zeros(
                     (num_bboxes, len(gt_labels[0])), dtype=torch.float32)
 
